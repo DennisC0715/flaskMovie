@@ -13,9 +13,12 @@
 {% block content %}
 <div class="container">
     <h1 class="heading">Select Movie</h1>
+  {% for item in data: %}
   <p>
-    <a href="#"> MOVIE TITLE - MOVIE RELEASE DATE</a>
+    <a href="{{url_for('select',id=item.id, title=item.title, img_url=item.poster_path, year=item.release_date, description=item.overview)}}" > {{item['title']}} - {{item['release_date']}}</a>
   </p>
-
+{% endfor %}
+  <a href="{{url_for('add')}}"><button>Go Back</button></a>
+  <a href="{{url_for('home')}}"><button>Return Home</button></a>
 </div>
 {% endblock %}

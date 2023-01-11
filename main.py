@@ -6,14 +6,17 @@ from wtforms import StringField, SubmitField
 from wtforms.validators import DataRequired
 import requests
 
-url = ""
+
+MOVIE_DB_API_KEY = "1939b79cec29c1183eddd06eed5a305e"
+read_access_token = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIxOTM5Yjc5Y2VjMjljMTE4M2VkZGQwNmVlZDVhMzA1ZSIsInN1YiI6IjYzYmVjNzgyNWJlMDBlMDA4NDYzZDk5ZiIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.Ogdte9bVT8ZKmjqYvOa3SejSXIC1AjRLEGNBT_bLhV4"
+MOVIE_DB_SEARCH_URL = "https://api.themoviedb.org/3/search/movie"
 app = Flask(__name__)
 app.config['SECRET_KEY'] = '8BYkEfBA6O6donzWlSihBXox7C0sKR6b'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///movies.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 Bootstrap(app)
 
-db = SQLAlchemy(app)
+db = SQLAlchemy(app, session_options={'expire_on_commit': False})
 
 class Movie(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -36,7 +39,7 @@ class RateMovieForm(FlaskForm):
 
 
 class AddMovieForm(FlaskForm):
-    title = StringField("Movie Title")
+    movie_title = StringField("Movie Title")
     submit = SubmitField("Add Movie")
 # new_movie = Movie(
 #     title="Phone Booth",
@@ -55,14 +58,23 @@ class AddMovieForm(FlaskForm):
 @app.route("/")
 def home():
     with app.app_context():
-        all_movies = db.session.query(Movie).all()
+        all_movies = db.session.query(Movie).order_by(Movie.rating).all()
+        print(all_movies)
+        for i in range(len(all_movies)):
+            # This line gives each movie a new ranking reversed from their order in all_movies
+            all_movies[i].ranking = len(all_movies) - i
+        db.session.commit()
+
     return render_template("index.html", movies=all_movies)
 
-@app.route("/add")
+
+@app.route("/add", methods=["GET", "POST"])
 def add():
     form = AddMovieForm()
     if form.validate_on_submit():
-        requests.get(url).json()
+        movie_title = form.movie_title.data
+        response = requests.get(MOVIE_DB_SEARCH_URL, params={"api_key": MOVIE_DB_API_KEY, "query": movie_title}).json()
+        return render_template("select.html", data=response['results'])
     return render_template("add.html", form=form)
 
 
@@ -76,7 +88,7 @@ def update():
             selected_movie.rating = float(form.rating.data)
             selected_movie.review = form.review.data
             db.session.commit()
-            return redirect("/")
+            return redirect(url_for("home"))
     return render_template("edit.html", movie=selected_movie, form=form)
 
 
@@ -87,10 +99,28 @@ def delete():
         movie_to_delete = Movie.query.get(movie_id)
         db.session.delete(movie_to_delete)
         db.session.commit()
-    return redirect("/")
+    return redirect(url_for("home"))
 
 
+@app.route("/select")
+def select():
+    movie_id = int(request.args.get("id"))
+    movie_api_url = f"https://api.themoviedb.org/3/movie/{movie_id}"
+    response = requests.get(movie_api_url, params={"api_key": MOVIE_DB_API_KEY, "language": "en-US"}).json()
 
+    new_movie = Movie(
+        title=response["title"],
+        year=response["release_date"].split("-")[0],
+        description=response["overview"],
+        img_url=f"https://www.themoviedb.org/t/p/original{response['poster_path']}",
+    )
+
+    with app.app_context():
+        db.session.add(new_movie)
+        db.session.commit()
+        db_movie_id = Movie.query.filter_by(title=f"{response['title']}").first().id
+        print(db_movie_id)
+    return redirect(url_for("update", id=db_movie_id))
 
 
 if __name__ == '__main__':
