@@ -6,6 +6,7 @@ from wtforms import StringField, SubmitField
 from wtforms.validators import DataRequired
 import requests
 
+url = ""
 app = Flask(__name__)
 app.config['SECRET_KEY'] = '8BYkEfBA6O6donzWlSihBXox7C0sKR6b'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///movies.db'
@@ -27,11 +28,16 @@ class Movie(db.Model):
 with app.app_context():
     db.create_all()
 
+
 class RateMovieForm(FlaskForm):
     rating = StringField("Your Rating Out of 10 e.g. 7.5")
     review = StringField("Your Review")
     submit = SubmitField("Done")
 
+
+class AddMovieForm(FlaskForm):
+    title = StringField("Movie Title")
+    submit = SubmitField("Add Movie")
 # new_movie = Movie(
 #     title="Phone Booth",
 #     year=2002,
@@ -54,7 +60,10 @@ def home():
 
 @app.route("/add")
 def add():
-    return render_template("add.html")
+    form = AddMovieForm()
+    if form.validate_on_submit():
+        requests.get(url).json()
+    return render_template("add.html", form=form)
 
 
 @app.route("/update", methods=["GET", "POST"])
@@ -64,11 +73,11 @@ def update():
         movie_id = request.args.get("id")
         selected_movie = Movie.query.get(movie_id)
         if form.validate_on_submit():
-            movie.rating = float(form.rating.data)
-            movie.review = form.review.data
+            selected_movie.rating = float(form.rating.data)
+            selected_movie.review = form.review.data
             db.session.commit()
             return redirect("/")
-    return render_template("edit.html", movie=selected_movie)
+    return render_template("edit.html", movie=selected_movie, form=form)
 
 
 @app.route("/delete")
@@ -79,6 +88,9 @@ def delete():
         db.session.delete(movie_to_delete)
         db.session.commit()
     return redirect("/")
+
+
+
 
 
 if __name__ == '__main__':
